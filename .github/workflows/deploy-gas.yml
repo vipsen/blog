@@ -27,3 +27,4 @@ jobs:
 
       - name: Push to GAS
         run: clasp push -f
+        working-directory: ./gas
