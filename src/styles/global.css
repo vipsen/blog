@@ -1,7 +1,7 @@
 /*
-  The CSS in this style tag is based off of Bear Blog's default CSS.
-  https://github.com/HermanMartinus/bearblog/blob/297026a877bc2ab2b3bdfbd6b9f7961c350917dd/templates/styles/blog/default.css
-  License MIT: https://github.com/HermanMartinus/bearblog/blob/master/LICENSE.md
+  Shell styles (Bear Blog 由来): ヘッダー・フッター・トップ等。
+  記事本文は `.znc` + zenn-content-css に任せるため、`.znc` を含む `main` 配下には
+  見出し・段落のベアスタイルを当てない。
  */
 
 :root {
@@ -40,8 +40,8 @@ body {
 	word-wrap: break-word;
 	overflow-wrap: break-word;
 	color: rgb(var(--gray-dark));
-	font-size: 20px;
-	line-height: 1.7;
+	font-size: 18px;
+	line-height: 1.65;
 }
 main {
 	width: 720px;
@@ -49,31 +49,37 @@ main {
 	margin: auto;
 	padding: 3em 1em;
 }
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
+
+/* 記事ページ以外（index 等）のタイポグラフィ */
+main:not(:has(.znc)) h1,
+main:not(:has(.znc)) h2,
+main:not(:has(.znc)) h3,
+main:not(:has(.znc)) h4,
+main:not(:has(.znc)) h5,
+main:not(:has(.znc)) h6 {
 	margin: 0 0 0.5rem 0;
 	color: rgb(var(--black));
 	line-height: 1.2;
 }
-h1 {
-	font-size: 3.052em;
+main:not(:has(.znc)) h1 {
+	font-size: 2.25rem;
 }
-h2 {
-	font-size: 2.441em;
+main:not(:has(.znc)) h2 {
+	font-size: 1.75rem;
 }
-h3 {
-	font-size: 1.953em;
+main:not(:has(.znc)) h3 {
+	font-size: 1.375rem;
 }
-h4 {
-	font-size: 1.563em;
+main:not(:has(.znc)) h4 {
+	font-size: 1.125rem;
 }
-h5 {
-	font-size: 1.25em;
+main:not(:has(.znc)) h5 {
+	font-size: 1.05rem;
 }
+main:not(:has(.znc)) h6 {
+	font-size: 1rem;
+}
+
 strong,
 b {
 	font-weight: 700;
@@ -84,11 +90,8 @@ a {
 a:hover {
 	color: var(--accent);
 }
-p {
+main:not(:has(.znc)) p {
 	margin-bottom: 1em;
-}
-.prose p {
-	margin-bottom: 2em;
 }
 textarea {
 	width: 100%;
@@ -97,39 +100,38 @@ textarea {
 input {
 	font-size: 16px;
 }
-table {
+main:not(:has(.znc)) table {
 	width: 100%;
 }
-img {
+main:not(:has(.znc)) img {
 	max-width: 100%;
 	height: auto;
 	border-radius: 8px;
 }
-code {
+main:not(:has(.znc)) code {
 	padding: 2px 5px;
 	background-color: rgb(var(--gray-light));
 	border-radius: 2px;
 }
-pre {
+main:not(:has(.znc)) pre {
 	padding: 1.5em;
 	border-radius: 8px;
 }
-pre > code {
+main:not(:has(.znc)) pre > code {
 	all: unset;
 }
-blockquote {
+main:not(:has(.znc)) blockquote {
 	border-left: 4px solid var(--accent);
 	padding: 0 0 0 20px;
 	margin: 0;
-	font-size: 1.333em;
 }
-hr {
+main:not(:has(.znc)) hr {
 	border: none;
 	border-top: 1px solid rgb(var(--gray-light));
 }
 @media (max-width: 720px) {
 	body {
-		font-size: 18px;
+		font-size: 17px;
 	}
 	main {
 		padding: 1em;
@@ -144,12 +146,8 @@ hr {
 	height: 1px;
 	width: 1px;
 	overflow: hidden;
-	/* IE6, IE7 - a 0 height clip, off to the bottom right of the visible 1px box */
 	clip: rect(1px 1px 1px 1px);
-	/* maybe deprecated but we need to support legacy browsers */
 	clip: rect(1px, 1px, 1px, 1px);
-	/* modern browsers, clip-path works inwards from each corner */
 	clip-path: inset(50%);
-	/* added line to stop words getting smushed together (as they go onto separate lines and some screen readers do not understand line feeds as a space */
 	white-space: nowrap;
 }

@@ -1,0 +1,202 @@
+---
+import { joinBasePath } from '../utils/siteBaseUrl';
+import {
+	ARTICLE_KIND_LABELS,
+	BLOG_CATEGORY_LABELS,
+	tagToParam,
+	type ArticleKind,
+	type BlogCategory,
+} from '../lib/blogTaxonomy';
+
+interface Props {
+	category: BlogCategory;
+	articleKind: ArticleKind;
+	tags: string[];
+	compact?: boolean;
+	/** When compact, center taxonomy + tag chips (e.g. featured post on home). */
+	centered?: boolean;
+}
+
+const { category, articleKind, tags = [], compact = false, centered = false } = Astro.props;
+---
+
+{
+	compact ? (
+		<div class:list={['blog-post-meta', 'compact', centered && 'compact-centered']}>
+			<div class="compact-taxonomy" aria-label="Category and kind">
+				<span class="meta-group">
+					<span class="meta-label">Category</span>
+					<a href={`${joinBasePath(`category/${category}`)}/`}>{BLOG_CATEGORY_LABELS[category]}</a>
+				</span>
+				<span class="meta-group">
+					<span class="meta-label">Kind</span>
+					<a href={`${joinBasePath(`kind/${articleKind}`)}/`}>{ARTICLE_KIND_LABELS[articleKind]}</a>
+				</span>
+			</div>
+			{tags.length > 0 && (
+				<ul class="meta-chips" aria-label="Tags">
+					{tags.map((t) => (
+						<li>
+							<a
+								class="chip chip-tag"
+								href={`${joinBasePath(`tags/${tagToParam(t)}`)}/`}
+								title={`Tag: ${t}`}
+							>
+								{t}
+							</a>
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
+	) : (
+		<div class="blog-post-meta">
+			<span class="meta-group">
+				<span class="meta-label">Category</span>
+				<a href={`${joinBasePath(`category/${category}`)}/`}>{BLOG_CATEGORY_LABELS[category]}</a>
+			</span>
+			<span class="meta-group">
+				<span class="meta-label">Kind</span>
+				<a href={`${joinBasePath(`kind/${articleKind}`)}/`}>{ARTICLE_KIND_LABELS[articleKind]}</a>
+			</span>
+			{tags.length > 0 && (
+				<ul class="meta-chips meta-chips-article" aria-label="Tags">
+					{tags.map((t) => (
+						<li>
+							<a
+								class="chip chip-tag"
+								href={`${joinBasePath(`tags/${tagToParam(t)}`)}/`}
+								title={`Tag: ${t}`}
+							>
+								{t}
+							</a>
+						</li>
+					))}
+				</ul>
+			)}
+		</div>
+	)
+}
+
+<style>
+	.blog-post-meta {
+		display: flex;
+		flex-wrap: nowrap;
+		align-items: center;
+		gap: 0.75rem 1.25rem;
+		font-size: 0.9rem;
+		color: rgb(var(--gray));
+		overflow-x: auto;
+		overflow-y: hidden;
+		-webkit-overflow-scrolling: touch;
+		scrollbar-width: thin;
+	}
+	.blog-post-meta:not(.compact) {
+		justify-content: center;
+	}
+	.meta-label {
+		margin-right: 0.35rem;
+		font-size: 0.75rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: rgb(var(--gray));
+		opacity: 0.9;
+	}
+	.meta-group {
+		display: inline-flex;
+		flex-wrap: nowrap;
+		align-items: baseline;
+		gap: 0.25rem;
+		flex-shrink: 0;
+	}
+	.blog-post-meta:not(.compact) > .meta-group a {
+		color: rgb(var(--accent));
+		text-decoration: none;
+	}
+	.blog-post-meta:not(.compact) > .meta-group a:hover {
+		text-decoration: underline;
+	}
+
+	/* Card list: labeled category/kind (match article), tag chips */
+	.blog-post-meta.compact {
+		margin-top: 0.5rem;
+		flex-direction: row;
+		align-items: center;
+		gap: 0.65rem 1rem;
+	}
+	.blog-post-meta.compact .compact-taxonomy {
+		display: flex;
+		flex-wrap: nowrap;
+		align-items: baseline;
+		justify-content: flex-start;
+		gap: 0.75rem 1.25rem;
+		font-size: 0.9rem;
+		color: rgb(var(--gray));
+		flex-shrink: 0;
+	}
+	.blog-post-meta.compact-centered {
+		justify-content: center;
+	}
+	.blog-post-meta.compact-centered .compact-taxonomy {
+		justify-content: center;
+	}
+	.blog-post-meta.compact .compact-taxonomy a {
+		color: rgb(var(--accent));
+		text-decoration: none;
+	}
+	.blog-post-meta.compact .compact-taxonomy a:hover {
+		text-decoration: underline;
+	}
+	.blog-post-meta .meta-chips {
+		display: flex;
+		flex-wrap: nowrap;
+		align-items: center;
+		gap: 0.35rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		flex-shrink: 0;
+	}
+	.blog-post-meta.compact .meta-chips {
+		justify-content: flex-start;
+	}
+	.blog-post-meta.compact-centered .meta-chips {
+		justify-content: center;
+	}
+	.blog-post-meta:not(.compact) .meta-chips-article {
+		flex: 0 0 auto;
+		justify-content: center;
+	}
+	.blog-post-meta .meta-chips li {
+		margin: 0;
+		padding: 0;
+	}
+	.blog-post-meta .chip {
+		display: inline-block;
+		max-width: 100%;
+		padding: 0.2rem 0.55rem;
+		font-size: 0.78rem;
+		line-height: 1.35;
+		color: rgb(var(--gray-dark));
+		text-decoration: none;
+		border: 1px solid rgb(var(--gray-light));
+		border-radius: 999px;
+		background: rgba(255, 255, 255, 0.55);
+		transition:
+			color 0.15s ease,
+			border-color 0.15s ease,
+			background 0.15s ease;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.blog-post-meta .chip-tag {
+		max-width: 12rem;
+	}
+	.blog-post-meta .chip:hover {
+		color: var(--accent);
+		border-color: rgba(35, 55, 255, 0.3);
+		background: #fff;
+		text-decoration: none;
+	}
+</style>

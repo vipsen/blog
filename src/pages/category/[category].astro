@@ -1,0 +1,115 @@
+---
+import { Image } from 'astro:assets';
+import { getCollection } from 'astro:content';
+import BaseHead from '../../components/BaseHead.astro';
+import BlogPostMeta from '../../components/BlogPostMeta.astro';
+import Footer from '../../components/Footer.astro';
+import FormattedDate from '../../components/FormattedDate.astro';
+import Header from '../../components/Header.astro';
+import { SITE_TITLE } from '../../consts';
+import {
+	BLOG_CATEGORIES,
+	BLOG_CATEGORY_LABELS,
+	type BlogCategory,
+} from '../../lib/blogTaxonomy';
+import { joinBasePath } from '../../utils/siteBaseUrl';
+
+export async function getStaticPaths() {
+	return BLOG_CATEGORIES.map((category) => ({ params: { category } }));
+}
+
+const category = Astro.params.category as BlogCategory;
+const posts = (await getCollection('blog', ({ data }) => data.category === category)).sort(
+	(a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf(),
+);
+
+const title = `${BLOG_CATEGORY_LABELS[category]} — ${SITE_TITLE}`;
+const description = `Posts in category ${BLOG_CATEGORY_LABELS[category]}.`;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<BaseHead title={title} description={description} />
+		<style>
+			main {
+				width: 960px;
+				max-width: calc(100% - 2em);
+				margin: auto;
+				padding: 1em;
+			}
+			h1 {
+				font-size: 1.75rem;
+				margin-bottom: 1rem;
+			}
+			ul {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 2rem;
+				list-style-type: none;
+				margin: 0;
+				padding: 0;
+			}
+			ul li {
+				width: calc(50% - 1rem);
+			}
+			.post-card-link {
+				display: block;
+				text-decoration: none;
+				color: inherit;
+			}
+			ul li img {
+				margin-bottom: 0.5rem;
+				border-radius: 12px;
+			}
+			.card-title {
+				margin: 0;
+				color: rgb(var(--black));
+				line-height: 1.2;
+			}
+			.date {
+				margin: 0.35rem 0 0;
+				color: rgb(var(--gray));
+				font-size: 0.9rem;
+			}
+			.post-card-link:hover .card-title {
+				color: rgb(var(--accent));
+			}
+			@media (max-width: 720px) {
+				ul li {
+					width: 100%;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<Header />
+		<main>
+			<h1>{BLOG_CATEGORY_LABELS[category]}</h1>
+			<ul>
+				{
+					posts.map((post) => (
+						<li class="post-card">
+							<a class="post-card-link" href={`${joinBasePath(post.id)}/`}>
+								{post.data.heroImage && (
+									<Image width={720} height={360} src={post.data.heroImage} alt="" />
+								)}
+								<h2 class="card-title">{post.data.title}</h2>
+								<p class="date">
+									<FormattedDate date={post.data.pubDate} />
+								</p>
+							</a>
+							<BlogPostMeta
+								category={post.data.category}
+								articleKind={post.data.articleKind}
+								tags={post.data.tags}
+								compact
+							/>
+						</li>
+					))
+				}
+			</ul>
+		</main>
+		<Footer />
+	</body>
+</html>

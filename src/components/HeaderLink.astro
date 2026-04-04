@@ -1,12 +1,29 @@
 ---
 import type { HTMLAttributes } from 'astro/types';
+import { pathRelativeToBase } from '../utils/siteBaseUrl';
 
 type Props = HTMLAttributes<'a'>;
 
 const { href, class: className, ...props } = Astro.props;
-const pathname = Astro.url.pathname.replace(import.meta.env.BASE_URL, '');
-const subpath = pathname.match(/[^\/]+/g);
-const isActive = href === pathname || href === '/' + (subpath?.[0] || '');
+const pathnameRel = pathRelativeToBase(Astro.url.pathname);
+
+function hrefToRelative(h: string): string {
+	if (h.startsWith('http://') || h.startsWith('https://')) return '__external__';
+	try {
+		const u = new URL(String(h), Astro.url);
+		return pathRelativeToBase(u.pathname);
+	} catch {
+		return pathRelativeToBase(String(h));
+	}
+}
+
+const hrefRel = hrefToRelative(String(href));
+const isActive =
+	hrefRel === '__external__'
+		? false
+		: hrefRel === ''
+			? pathnameRel === ''
+			: pathnameRel === hrefRel || pathnameRel.startsWith(`${hrefRel}/`);
 ---
 
 <a href={href} class:list={[className, { active: isActive }]} {...props}>

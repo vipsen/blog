@@ -1,0 +1,82 @@
+---
+import { getCollection } from 'astro:content';
+import BaseHead from '../../components/BaseHead.astro';
+import Footer from '../../components/Footer.astro';
+import Header from '../../components/Header.astro';
+import { SITE_TITLE } from '../../consts';
+import {
+	BLOG_CATEGORIES,
+	BLOG_CATEGORY_LABELS,
+	type BlogCategory,
+} from '../../lib/blogTaxonomy';
+import { joinBasePath } from '../../utils/siteBaseUrl';
+
+const posts = await getCollection('blog');
+const counts: Record<BlogCategory, number> = {
+	ml: 0,
+	language: 0,
+	tooling: 0,
+	curation: 0,
+};
+for (const p of posts) {
+	counts[p.data.category]++;
+}
+
+const title = `Categories — ${SITE_TITLE}`;
+const description = 'Browse posts by category.';
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<BaseHead title={title} description={description} />
+		<style>
+			main {
+				width: 720px;
+				max-width: calc(100% - 2em);
+				margin: auto;
+				padding: 1em;
+			}
+			h1 {
+				font-size: 1.75rem;
+				margin-bottom: 1rem;
+			}
+			ul {
+				list-style: none;
+				padding: 0;
+				margin: 0;
+			}
+			li {
+				margin-bottom: 0.65rem;
+			}
+			a {
+				color: rgb(var(--accent));
+				text-decoration: none;
+			}
+			a:hover {
+				text-decoration: underline;
+			}
+			.count {
+				color: rgb(var(--gray));
+				font-size: 0.9em;
+			}
+		</style>
+	</head>
+	<body>
+		<Header />
+		<main>
+			<h1>Categories</h1>
+			<ul>
+				{
+					BLOG_CATEGORIES.map((c) => (
+						<li>
+							<a href={`${joinBasePath(`category/${c}`)}/`}>{BLOG_CATEGORY_LABELS[c]}</a>
+							<span class="count"> ({counts[c]})</span>
+						</li>
+					))
+				}
+			</ul>
+		</main>
+		<Footer />
+	</body>
+</html>

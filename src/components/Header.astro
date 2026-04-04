@@ -1,15 +1,19 @@
 ---
 import { SITE_TITLE } from '../consts';
 import HeaderLink from './HeaderLink.astro';
+import { joinBasePath } from '../utils/siteBaseUrl';
+
+const homeHref = joinBasePath('');
 ---
 
 <header>
 	<nav>
-		<h2><a href="/">{SITE_TITLE}</a></h2>
+		<h2><a href={homeHref}>{SITE_TITLE}</a></h2>
 		<div class="internal-links">
-			<HeaderLink href="/">Home</HeaderLink>
-			<HeaderLink href="/blog">Blog</HeaderLink>
-			<HeaderLink href="/about">About</HeaderLink>
+			<HeaderLink href={homeHref}>Home</HeaderLink>
+			<HeaderLink href={joinBasePath('category')}>Categories</HeaderLink>
+			<HeaderLink href={joinBasePath('tags')}>Tags</HeaderLink>
+			<HeaderLink href={joinBasePath('kind')}>Kinds</HeaderLink>
 		</div>
 		<div class="social-links">
 			<a href="https://m.webtoo.ls/@astro" target="_blank">
@@ -77,9 +81,19 @@ import HeaderLink from './HeaderLink.astro';
 	.social-links a {
 		display: flex;
 	}
+	@media (max-width: 900px) {
+		.internal-links a {
+			padding: 0.65em 0.35em;
+			font-size: 0.9rem;
+		}
+	}
 	@media (max-width: 720px) {
 		.social-links {
 			display: none;
+		}
+		nav {
+			flex-wrap: wrap;
+			gap: 0.25rem;
 		}
 	}
 </style>
