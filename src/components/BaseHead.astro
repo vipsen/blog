@@ -2,6 +2,8 @@
 // Import the global.css file here so that it is included on
 // all pages through the use of the <BaseHead /> component.
 import '../styles/global.css';
+import '@fontsource/noto-sans-jp/400.css';
+import '@fontsource/noto-sans-jp/700.css';
 import type { ImageMetadata } from 'astro';
 import FallbackImage from '../assets/blog-placeholder-1.jpg';
 import { SITE_TITLE } from '../consts';
@@ -33,9 +35,7 @@ const rssHref = new URL(joinBasePath('rss.xml'), Astro.url.origin).href;
 />
 <meta name="generator" content={Astro.generator} />
 
-<!-- Font preloads -->
-<link rel="preload" href={joinBasePath('fonts/atkinson-regular.woff')} as="font" type="font/woff" crossorigin />
-<link rel="preload" href={joinBasePath('fonts/atkinson-bold.woff')} as="font" type="font/woff" crossorigin />
+
 
 <!-- Canonical URL -->
 <link rel="canonical" href={Astro.url.href} />
