@@ -27,13 +27,12 @@ const GENERATE_CONTENT_BASE =
 
 /** Astro 用 Markdown 生成ルール（formatBlogPost_ のプロンプト本文） */
 const BLOG_MARKDOWN_RULES_ =
-  'ルール:\n' +
+  'Markdown生成ルール:\n' +
   '- 日本語で執筆。技術的に正確で読みやすい文体。段落はおおむね3〜5文を目安にする。\n' +
-  '- 見出し: 本文に #（h1相当）を書かない。記事タイトルは frontmatter の title のみ。最初の章は ## から。### は ## の直下のみ。#### まで使う場合は階層を飛ばさない。\n' +
+  '- 見出し: 本文に #（h1相当）を書かない。最初の章は ## から。### は ## の直下のみ。#### まで使う場合は階層を飛ばさない。\n' +
   '- 許可する Markdown: 段落、##〜####、箇条書き・番号リスト、引用、コードフェンス（言語識別子必須。例 ```ts）、水平線、リンク、表、画像（alt 必須）。\n' +
-  '- 禁止: 生HTML（div/span/script/style 等）、インラインHTML、見出し代わりの単独太字行のみの行。\n' +
-  '- 出典URLは記事末尾に「## 参考リンク」セクションを付け、[タイトル](URL) 形式の箇条書きで列挙する。\n' +
-  '- frontmatter の先頭 --- から終端 --- まで以外に説明文を付けない。\n';
+  '- 禁止: 生HTML（div/span/script/style 等）、インラインHTML、見出し代わりの単独太字行のみの行、およびフロントマター（---）の出力。\n' +
+  '- 出典URLは記事末尾に「## 参考リンク」セクションを付け、[タイトル](URL) 形式の箇条書きで列挙する。\n';
 
 // ---------------------------------------------------------------------------
 // 1. startResearch — タイマートリガーから呼ばれるエントリポイント
@@ -145,11 +144,25 @@ function pollResearch() {
 // ---------------------------------------------------------------------------
 
 function selectTopic_(cfg) {
+  const date = new Date();
   const today = Utilities.formatDate(
-    new Date(),
+    date,
     'Asia/Tokyo',
     'yyyy年M月d日',
   );
+
+  // 曜日を取得 (0:日, 1:月, 2:火, 3:水, 4:木, 5:金, 6:土)
+  const dayOfWeek = date.getDay();
+
+  // 曜日に応じてテーマを分岐させる（例: 月・水・金でトリガーされると仮定）
+  let promptFocus = 'AI分野（LLM、生成AI、機械学習、ロボティクス等）全般';
+  if (dayOfWeek === 1) { // 月曜日
+    promptFocus = '「基盤モデルやLLMの最新研究・論文の動向」';
+  } else if (dayOfWeek === 3) { // 水曜日
+    promptFocus = '「オープンソースのAIツールや開発者向けエコシステムの動向」';
+  } else if (dayOfWeek === 5) { // 金曜日
+    promptFocus = '「AIのビジネス活用事例や新しいプロダクトのリリース」';
+  }
 
   const res = UrlFetchApp.fetch(
     GENERATE_CONTENT_BASE + '?key=' + cfg.geminiApiKey,
@@ -165,11 +178,12 @@ function selectTopic_(cfg) {
                 text:
                   '今日は' +
                   today +
-                  'です。AI分野（LLM、生成AI、機械学習、ロボティクス等）で' +
-                  '今最も注目すべきトピックを1つ選び、' +
+                  'です。' +
+                  promptFocus +
+                  'にフォーカスして、今最も注目すべきトピックを1つ選び、' +
                   'Deep Researchエージェントへの具体的な調査指示を日本語で作成してください。\n\n' +
                   'ルール:\n' +
-                  '- 直近1〜2週間のニュース、論文、製品リリースを考慮\n' +
+                  '- 調査対象を「今日から直近1週間以内の情報」に厳密に限定するよう指示に含めること\n' +
                   '- 調査指示のみを出力（前置き不要）\n' +
                   '- 調査の範囲、深さ、着目ポイントを明示',
               },
@@ -189,7 +203,48 @@ function selectTopic_(cfg) {
 // ---------------------------------------------------------------------------
 
 function formatBlogPost_(cfg, researchResult) {
-  const today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const date = new Date();
+  const today = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy-MM-dd');
+  const dayOfWeek = date.getDay();
+
+  // 曜日に応じてカテゴリとタグのヒントを変える
+  let categoryStr = 'ml';
+  let tagHint = '（例 llm, generative-ai）';
+
+  if (dayOfWeek === 1) { // 月曜：研究・論文
+    categoryStr = 'ml';
+    tagHint = '（例 paper, llm, base-model）';
+  } else if (dayOfWeek === 3) { // 水曜：ツール
+    categoryStr = 'tooling';
+    tagHint = '（例 tools, open-source, framework）';
+  } else if (dayOfWeek === 5) { // 金曜：ビジネス・プロダクト
+    categoryStr = 'curation';
+    tagHint = '（例 business, product, use-case）';
+  }
+
+  const schema = {
+    type: "OBJECT",
+    properties: {
+      title: {
+        type: "STRING",
+        description: "記事のタイトル"
+      },
+      description: {
+        type: "STRING",
+        description: "記事の概要（1〜2文）"
+      },
+      tags: {
+        type: "ARRAY",
+        items: { type: "STRING" },
+        description: "記事の内容から適切なものを抽出したタグ。英語スラッグ必須 " + tagHint
+      },
+      body: {
+        type: "STRING",
+        description: "記事の本文（Markdown形式）。ここにはフロントマターを含めないでください。"
+      }
+    },
+    required: ["title", "description", "tags", "body"]
+  };
 
   const res = UrlFetchApp.fetch(
     GENERATE_CONTENT_BASE + '?key=' + cfg.geminiApiKey,
@@ -203,20 +258,7 @@ function formatBlogPost_(cfg, researchResult) {
             parts: [
               {
                 text:
-                  '以下の調査結果をブログ記事に変換してください。\n\n' +
-                  '出力フォーマット（これを厳密に守ること）:\n' +
-                  '---\n' +
-                  'title: "記事タイトル"\n' +
-                  'description: "記事の概要（1-2文）"\n' +
-                  'pubDate: "' + today + '"\n' +
-                  'category: ml\n' +
-                  'articleKind: weekly-brief\n' +
-                  'tags: ["タグ1", "タグ2", "タグ3"]\n' +
-                  '---\n\n' +
-                  'category は次のいずれかのキーのみ（引用なし）: ml | language | tooling | curation。Deep Research 週次記事は ml。\n' +
-                  'articleKind は次のいずれかのみ（引用なし）: weekly-brief | spotlight。タイマー定例は weekly-brief。\n' +
-                  'tags は英語スラッグ推奨（例 llm, gemini）。\n\n' +
-                  '（ここに本文を Markdown で記述）\n\n' +
+                  '以下の調査結果をもとに技術ブログの記事を作成してください。\n\n' +
                   BLOG_MARKDOWN_RULES_ +
                   '\n' +
                   '調査結果:\n' +
@@ -225,15 +267,27 @@ function formatBlogPost_(cfg, researchResult) {
             ],
           },
         ],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: schema
+        }
       }),
     },
   );
 
   const data = JSON.parse(res.getContentText());
-  let content = data.candidates[0].content.parts[0].text;
+  const jsonOutput = JSON.parse(data.candidates[0].content.parts[0].text);
 
-  // Gemini が ```markdown ... ``` で囲む場合があるので除去
-  content = content.replace(/^```markdown\s*\n?/, '').replace(/\n?```\s*$/, '');
+  // GAS側でフロントマターを組み立てる
+  let content = '---\n';
+  content += 'title: "' + jsonOutput.title.replace(/"/g, '\\"') + '"\n';
+  content += 'description: "' + jsonOutput.description.replace(/"/g, '\\"') + '"\n';
+  content += 'pubDate: "' + today + '"\n';
+  content += 'category: ' + categoryStr + '\n';
+  content += 'articleKind: weekly-brief\n';
+  content += 'tags: ' + JSON.stringify(jsonOutput.tags || []) + '\n';
+  content += '---\n\n';
+  content += jsonOutput.body;
 
   return content;
 }
