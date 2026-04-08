@@ -1,7 +1,8 @@
 // ===========================================================================
 // AI Blog Auto-Pipeline — Google Apps Script
 //
-// GAS のタイムドリブントリガーで週3回 Deep Research を実行し、
+// GAS のタイムドリブントリガーで毎日 Deep Research を2フェーズで実行し、
+// Phase 1: 直近1週間の動向サマリー → Phase 2: 最もおすすめのトピックを深掘り
 // 結果を Gemini Flash でブログ記事に変換して GitHub に直接コミットする。
 // ===========================================================================
 
@@ -36,7 +37,7 @@ const BLOG_MARKDOWN_RULES_ =
 
 /**
  * 曜日ごとのトピック設定 (0=日, 1=月, 2=火, 3=水, 4=木, 5=金, 6=土)
- * focus       : selectTopic_ がプロンプトに埋め込むテーマ指定文
+ * focus       : buildSummaryQuery_ がプロンプトに埋め込むテーマ指定文
  * researchGuide: より具体的な調査ガイドライン
  * category    : Astroフロントマターの category 値
  * tagHint     : formatBlogPost_ がタグ生成時に参考にするヒント
@@ -100,9 +101,9 @@ const DAILY_TOPICS_ = {
 function startResearch() {
   const cfg = getConfig_();
 
-  // Topic 選定
-  const topic = selectTopic_(cfg);
-  Logger.log('Selected topic: ' + topic);
+  // Phase 1: 直近1週間のサマリー調査クエリを生成
+  const summaryQuery = buildSummaryQuery_(cfg);
+  Logger.log('Summary query generated — length: ' + summaryQuery.length);
 
   // Deep Research 開始 (background=true)
   const res = UrlFetchApp.fetch(INTERACTIONS_BASE + '?key=' + cfg.geminiApiKey, {
@@ -111,7 +112,7 @@ function startResearch() {
     muteHttpExceptions: true,
     payload: JSON.stringify({
       agent: 'deep-research-pro-preview-12-2025',
-      input: topic,
+      input: summaryQuery,
       background: true,
     }),
   });
@@ -122,12 +123,12 @@ function startResearch() {
   }
 
   const interaction = JSON.parse(res.getContentText());
-  Logger.log('Deep Research started — interaction_id: ' + interaction.id);
+  Logger.log('Phase 1 (summary) started — interaction_id: ' + interaction.id);
 
   // State を保存
   const props = PropertiesService.getScriptProperties();
   props.setProperty('CURRENT_INTERACTION_ID', interaction.id);
-  props.setProperty('CURRENT_TOPIC', topic);
+  props.setProperty('CURRENT_PHASE', '1_summary');
   props.setProperty('POLL_START_TIME', String(Date.now()));
 
   // 5 分おきポーリングトリガーを設定
@@ -145,6 +146,7 @@ function pollResearch() {
   const cfg = getConfig_();
   const props = PropertiesService.getScriptProperties();
   const interactionId = props.getProperty('CURRENT_INTERACTION_ID');
+  const phase = props.getProperty('CURRENT_PHASE');
 
   if (!interactionId) {
     deletePollingTrigger_();
@@ -154,7 +156,7 @@ function pollResearch() {
   // タイムアウト判定 (70 分)
   const elapsed = Date.now() - Number(props.getProperty('POLL_START_TIME'));
   if (elapsed > 70 * 60 * 1000) {
-    Logger.log('Deep Research timed out after 70 minutes');
+    Logger.log('Deep Research timed out after 70 minutes (phase: ' + phase + ')');
     cleanup_();
     return;
   }
@@ -171,27 +173,66 @@ function pollResearch() {
   }
 
   const interaction = JSON.parse(res.getContentText());
-  Logger.log('Poll status: ' + interaction.status);
+  Logger.log('Poll status [' + phase + ']: ' + interaction.status);
 
   if (interaction.status === 'completed') {
     const researchResult =
       interaction.outputs[interaction.outputs.length - 1].text;
-    Logger.log(
-      'Research completed — result length: ' + researchResult.length,
-    );
+    Logger.log('Research completed — result length: ' + researchResult.length);
 
-    // ブログ記事生成
-    const blogPost = formatBlogPost_(cfg, researchResult);
-    Logger.log('Blog post generated — length: ' + blogPost.length);
+    if (phase === '1_summary') {
+      // Phase 1 完了: サマリーを保存し、Gemini でおすすめトピックを選定し、Phase 2 を開始
+      Logger.log('Phase 1 done. Saving summary and picking best topic...');
 
-    // GitHub にコミット
-    commitToGitHub_(cfg, blogPost);
-    Logger.log('Committed to GitHub');
+      // サマリーを Script Properties に一時保存（上限対策: 7000字で切り詰め）
+      const summaryTruncated = researchResult.substring(0, 7000);
+      props.setProperty('SUMMARY_RESULT', summaryTruncated);
+      Logger.log('Summary saved — stored length: ' + summaryTruncated.length);
 
-    cleanup_();
+      const deepDiveQuery = pickTopicFromSummary_(cfg, researchResult);
+      Logger.log('Deep dive query: ' + deepDiveQuery.substring(0, 120) + '...');
+
+      // Phase 2 の Deep Research を開始
+      const res2 = UrlFetchApp.fetch(INTERACTIONS_BASE + '?key=' + cfg.geminiApiKey, {
+        method: 'post',
+        contentType: 'application/json',
+        muteHttpExceptions: true,
+        payload: JSON.stringify({
+          agent: 'deep-research-pro-preview-12-2025',
+          input: deepDiveQuery,
+          background: true,
+        }),
+      });
+
+      if (res2.getResponseCode() !== 200) {
+        Logger.log('Phase 2 start failed: ' + res2.getContentText());
+        cleanup_();
+        return;
+      }
+
+      const interaction2 = JSON.parse(res2.getContentText());
+      Logger.log('Phase 2 (deep dive) started — interaction_id: ' + interaction2.id);
+
+      // props を Phase 2 用に更新（ポーリングトリガーはそのまま継続）
+      props.setProperty('CURRENT_INTERACTION_ID', interaction2.id);
+      props.setProperty('CURRENT_PHASE', '2_deepdive');
+      props.setProperty('POLL_START_TIME', String(Date.now()));
+
+    } else {
+      // Phase 2 完了: サマリーも含めたブログ記事を生成 → GitHub コミット → クリーンアップ
+      const summaryResult = props.getProperty('SUMMARY_RESULT') || '';
+      const blogPost = formatBlogPost_(cfg, researchResult, summaryResult);
+      Logger.log('Blog post generated — length: ' + blogPost.length);
+
+      commitToGitHub_(cfg, blogPost);
+      Logger.log('Committed to GitHub');
+
+      cleanup_();
+    }
+
   } else if (interaction.status === 'failed') {
     Logger.log(
-      'Deep Research failed: ' + JSON.stringify(interaction.error || ''),
+      'Deep Research failed [' + phase + ']: ' + JSON.stringify(interaction.error || ''),
     );
     cleanup_();
   }
@@ -199,10 +240,10 @@ function pollResearch() {
 }
 
 // ---------------------------------------------------------------------------
-// 3. selectTopic_ — Gemini Flash でトピックを選定
+// 3. buildSummaryQuery_ — Gemini Flash で「1週間サマリー」調査クエリを生成 (Phase 1)
 // ---------------------------------------------------------------------------
 
-function selectTopic_(cfg) {
+function buildSummaryQuery_(cfg) {
   const date = new Date();
   const today = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy年M月d日');
   const dayOfWeek = date.getDay(); // 0=日, 1=月, ..., 6=土
@@ -223,13 +264,15 @@ function selectTopic_(cfg) {
               {
                 text:
                   '今日は' + today + 'です。' +
-                  topic.focus + 'にフォーカスして、今最も注目すべきトピックを1つ選び、' +
-                  'Deep Researchエージェントへの具体的な調査指示を日本語で作成してください。\n\n' +
+                  topic.focus + 'をテーマとして、' +
+                  'Deep Researchエージェントに「直近1週間の主要な動向を網羅的に調査する」よう指示する調査クエリを日本語で作成してください。\n\n' +
                   'ルール:\n' +
                   '- 調査対象を「今日から直近1週間以内の情報」に厳密に限定するよう指示に含めること\n' +
+                  '- 特定の1トピックに絞らず、テーマ全体をカバーする複数のトピックを網羅するよう指示すること\n' +
                   '- ' + topic.researchGuide + '\n' +
+                  '- 各トピックについて「何が起きたか」「なぜ注目されるか」を含めるよう指示すること\n' +
                   '- 調査指示のみを出力（前置き不要）\n' +
-                  '- 調査の範囲、深さ、着目ポイントを明示',
+                  '- 調査の範囲・深さ・着目ポイントを明示',
               },
             ],
           },
@@ -243,10 +286,53 @@ function selectTopic_(cfg) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. formatBlogPost_ — 調査結果を Astro Markdown に変換
+// 4. pickTopicFromSummary_ — サマリーからおすすめトピックを選定し深掘りクエリを生成 (Phase 1→2)
 // ---------------------------------------------------------------------------
 
-function formatBlogPost_(cfg, researchResult) {
+function pickTopicFromSummary_(cfg, summaryText) {
+  const date = new Date();
+  const dayOfWeek = date.getDay();
+  const topic = DAILY_TOPICS_[dayOfWeek];
+
+  const res = UrlFetchApp.fetch(
+    GENERATE_CONTENT_BASE + '?key=' + cfg.geminiApiKey,
+    {
+      method: 'post',
+      contentType: 'application/json',
+      muteHttpExceptions: true,
+      payload: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text:
+                  '以下は「' + topic.name + '」に関する直近1週間の調査サマリーです。\n\n' +
+                  '---\n' +
+                  summaryText +
+                  '\n---\n\n' +
+                  'このサマリーの中から、技術ブログの読者にとって最も価値があり深掘りする価値のあるトピックを1つ選び、' +
+                  'そのトピックをDeep Researchエージェントが詳細に調査するための具体的な調査指示を日本語で作成してください。\n\n' +
+                  'ルール:\n' +
+                  '- 最もインパクトが大きく、技術的に興味深いトピックを選ぶこと\n' +
+                  '- 調査指示は詳細かつ具体的に（背景・技術的詳細・他手法との比較・実装例・業界への影響など）\n' +
+                  '- 調査指示のみを出力（前置きやトピック説明は不要）',
+              },
+            ],
+          },
+        ],
+      }),
+    },
+  );
+
+  const data = JSON.parse(res.getContentText());
+  return data.candidates[0].content.parts[0].text;
+}
+
+// ---------------------------------------------------------------------------
+// 5. formatBlogPost_ — 調査結果を Astro Markdown に変換
+// ---------------------------------------------------------------------------
+
+function formatBlogPost_(cfg, deepDiveResult, summaryResult) {
   const date = new Date();
   const today = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy-MM-dd');
   const dayOfWeek = date.getDay();
@@ -261,11 +347,11 @@ function formatBlogPost_(cfg, researchResult) {
     properties: {
       title: {
         type: "STRING",
-        description: "記事のタイトル"
+        description: "記事のタイトル（深掘りトピックを中心にした魅力的なタイトル）"
       },
       description: {
         type: "STRING",
-        description: "記事の概要（1〜2文）"
+        description: "記事の概要（1〜2文）—今週のサマリーと深掘りトピックの両方に触れる"
       },
       tags: {
         type: "ARRAY",
@@ -274,7 +360,7 @@ function formatBlogPost_(cfg, researchResult) {
       },
       body: {
         type: "STRING",
-        description: "記事の本文（Markdown形式）。ここにはフロントマターを含めないでください。"
+        description: "記事の本文（Markdown形式）。フロントマターを含めないこと。"
       }
     },
     required: ["title", "description", "tags", "body"]
@@ -292,11 +378,15 @@ function formatBlogPost_(cfg, researchResult) {
             parts: [
               {
                 text:
-                  '以下の調査結果をもとに技術ブログの記事を作成してください。\n\n' +
+                  '以下の2種類の調査結果をもとに技術ブログ記事を作成してください。\n\n' +
                   BLOG_MARKDOWN_RULES_ +
-                  '\n' +
-                  '調査結果:\n' +
-                  researchResult,
+                  '\n記事の構成指示（必ずこの順序で書く）:\n' +
+                  '1. ## 今週の動向まとめ（または同等の短い見出し）: 「今週のサマリー調査結果」の主要トピックを箇条書きや簡潔な説明でまとめる（記事全体の1/3程度）\n' +
+                  '2. ## 深掘り: [XXX]（"XXX"は深掘りトピック名）: 「深掘り調査結果」をもとに詳細な解説記事を書く（記事全体の2/3程度）\n\n' +
+                  '「今週のサマリー調査結果」:\n' +
+                  summaryResult +
+                  '\n\n「深掘り調査結果」:\n' +
+                  deepDiveResult,
               },
             ],
           },
@@ -327,7 +417,7 @@ function formatBlogPost_(cfg, researchResult) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. commitToGitHub_ — GitHub Contents API でファイルを作成
+// 6. commitToGitHub_ — GitHub Contents API でファイルを作成
 // ---------------------------------------------------------------------------
 
 function commitToGitHub_(cfg, markdownContent) {
@@ -393,8 +483,9 @@ function cleanup_() {
   deletePollingTrigger_();
   var props = PropertiesService.getScriptProperties();
   props.deleteProperty('CURRENT_INTERACTION_ID');
-  props.deleteProperty('CURRENT_TOPIC');
+  props.deleteProperty('CURRENT_PHASE');
   props.deleteProperty('POLL_START_TIME');
+  props.deleteProperty('SUMMARY_RESULT');
 }
 
 // ---------------------------------------------------------------------------
