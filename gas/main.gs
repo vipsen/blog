@@ -94,6 +94,37 @@ const DAILY_TOPICS_ = {
   },
 };
 
+/**
+ * Gemini generateContent のレスポンスからテキストを安全に抽出するヘルパー。
+ * candidates が存在しない場合（コンテンツフィルタ、レート制限等）は
+ * 詳細なエラーログを出力して例外を throw する。
+ */
+function extractGeminiText_(res, callerName) {
+  if (res.getResponseCode() !== 200) {
+    var msg = callerName + ': Gemini API returned HTTP ' + res.getResponseCode() + ': ' + res.getContentText().substring(0, 300);
+    Logger.log(msg);
+    throw new Error(msg);
+  }
+
+  var data = JSON.parse(res.getContentText());
+
+  if (!data.candidates || data.candidates.length === 0) {
+    var feedback = data.promptFeedback ? JSON.stringify(data.promptFeedback) : 'none';
+    var msg2 = callerName + ': No candidates returned. promptFeedback=' + feedback;
+    Logger.log(msg2);
+    throw new Error(msg2);
+  }
+
+  var candidate = data.candidates[0];
+  if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0) {
+    var msg3 = callerName + ': Candidate has no content. finishReason=' + (candidate.finishReason || 'unknown');
+    Logger.log(msg3);
+    throw new Error(msg3);
+  }
+
+  return candidate.content.parts[0].text;
+}
+
 // ---------------------------------------------------------------------------
 // 1. startResearch — タイマートリガーから呼ばれるエントリポイント
 // ---------------------------------------------------------------------------
@@ -184,10 +215,10 @@ function pollResearch() {
       // Phase 1 完了: サマリーを保存し、Gemini でおすすめトピックを選定し、Phase 2 を開始
       Logger.log('Phase 1 done. Saving summary and picking best topic...');
 
-      // サマリーを Script Properties に一時保存（上限対策: 7000字で切り詰め）
-      const summaryTruncated = researchResult.substring(0, 7000);
-      props.setProperty('SUMMARY_RESULT', summaryTruncated);
-      Logger.log('Summary saved — stored length: ' + summaryTruncated.length);
+      // サマリーを CacheService に一時保存（100KB上限・3時間有効）
+      const cache = CacheService.getScriptCache();
+      cache.put('SUMMARY_RESULT', researchResult, 10800);
+      Logger.log('Summary cached — length: ' + researchResult.length);
 
       const deepDiveQuery = pickTopicFromSummary_(cfg, researchResult);
       Logger.log('Deep dive query: ' + deepDiveQuery.substring(0, 120) + '...');
@@ -220,7 +251,8 @@ function pollResearch() {
 
     } else {
       // Phase 2 完了: サマリーも含めたブログ記事を生成 → GitHub コミット → クリーンアップ
-      const summaryResult = props.getProperty('SUMMARY_RESULT') || '';
+      const cache = CacheService.getScriptCache();
+      const summaryResult = cache.get('SUMMARY_RESULT') || '';
       const blogPost = formatBlogPost_(cfg, researchResult, summaryResult);
       Logger.log('Blog post generated — length: ' + blogPost.length);
 
@@ -281,8 +313,7 @@ function buildSummaryQuery_(cfg) {
     },
   );
 
-  const data = JSON.parse(res.getContentText());
-  return data.candidates[0].content.parts[0].text;
+  return extractGeminiText_(res, 'buildSummaryQuery_');
 }
 
 // ---------------------------------------------------------------------------
@@ -324,8 +355,7 @@ function pickTopicFromSummary_(cfg, summaryText) {
     },
   );
 
-  const data = JSON.parse(res.getContentText());
-  return data.candidates[0].content.parts[0].text;
+  return extractGeminiText_(res, 'pickTopicFromSummary_');
 }
 
 // ---------------------------------------------------------------------------
@@ -399,8 +429,8 @@ function formatBlogPost_(cfg, deepDiveResult, summaryResult) {
     },
   );
 
-  const data = JSON.parse(res.getContentText());
-  const jsonOutput = JSON.parse(data.candidates[0].content.parts[0].text);
+  const rawText = extractGeminiText_(res, 'formatBlogPost_');
+  const jsonOutput = JSON.parse(rawText);
 
   // GAS側でフロントマターを組み立てる
   let content = '---\n';
@@ -485,7 +515,7 @@ function cleanup_() {
   props.deleteProperty('CURRENT_INTERACTION_ID');
   props.deleteProperty('CURRENT_PHASE');
   props.deleteProperty('POLL_START_TIME');
-  props.deleteProperty('SUMMARY_RESULT');
+  CacheService.getScriptCache().remove('SUMMARY_RESULT');
 }
 
 // ---------------------------------------------------------------------------
