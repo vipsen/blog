@@ -34,6 +34,65 @@ const BLOG_MARKDOWN_RULES_ =
   '- 禁止: 生HTML（div/span/script/style 等）、インラインHTML、見出し代わりの単独太字行のみの行、およびフロントマター（---）の出力。\n' +
   '- 出典URLは記事末尾に「## 参考リンク」セクションを付け、[タイトル](URL) 形式の箇条書きで列挙する。\n';
 
+/**
+ * 曜日ごとのトピック設定 (0=日, 1=月, 2=火, 3=水, 4=木, 5=金, 6=土)
+ * focus       : selectTopic_ がプロンプトに埋め込むテーマ指定文
+ * researchGuide: より具体的な調査ガイドライン
+ * category    : Astroフロントマターの category 値
+ * tagHint     : formatBlogPost_ がタグ生成時に参考にするヒント
+ */
+const DAILY_TOPICS_ = {
+  0: {
+    name: 'マルチモーダル・生成AI',
+    focus: '「マルチモーダルAI・画像/動画/音楽生成AIの最新動向」（Stable Diffusion系、VideoGenモデル、3D生成、画像編集AIなど）',
+    researchGuide: '対象例: Stability AI / Runway / Kling / Sora / Wan / HiDream / MusicGen 等。新モデルのリリース・性能比較・ユニークなユースケースに着目すること。',
+    category: 'curation',
+    tagHint: '（例 multimodal, image-gen, video-gen, generative-ai）',
+  },
+  1: {
+    name: 'メジャーLab最新情報',
+    focus: '「OpenAI / Anthropic / Google DeepMind / Microsoft によるAI分野の最新動向」',
+    researchGuide: '新規モデルのリリース（weights公開・API提供どちらも対象）、公式ブログ記事、研究発表、製品アップデート、業界への影響に着目すること。',
+    category: 'curation',
+    tagHint: '（例 openai, anthropic, deepmind, microsoft, llm）',
+  },
+  2: {
+    name: 'OSSモデル最新情報',
+    focus: '「Meta / DeepSeek / GLM / miniMAX / Qwen / Kimi / Mistral 等のオープンソースモデル勢の最新動向」',
+    researchGuide: '新モデルのリリース、Hugging Face公開状況、ベンチマーク結果、コミュニティの反応・注目ユースケースに着目すること。',
+    category: 'curation',
+    tagHint: '（例 open-source, meta, deepseek, qwen, mistral, llm）',
+  },
+  3: {
+    name: 'ML/LLM最新研究・論文',
+    focus: '「基盤モデルやLLMに関する最新の研究・論文の動向」',
+    researchGuide: 'arxiv や NeurIPS/ICML/ICLR 等の注目論文、新アーキテクチャ、学習手法（RLHF/DPO等）、アライメント、推論能力、ベンチマークに着目すること。',
+    category: 'ml',
+    tagHint: '（例 paper, llm, research, base-model, alignment）',
+  },
+  4: {
+    name: '音声AI最新情報',
+    focus: '「STT（音声認識）/ TTS（音声合成）/ ASR / 音声AIの新しいモデルやツールの動向」',
+    researchGuide: '新モデルのリリース・性能比較、日本語対応の有無と品質、リアルタイム性能、感情表現・多言語対応、オープンソースの動向に特に着目すること。',
+    category: 'ml',
+    tagHint: '（例 speech, tts, stt, asr, audio-ai, japanese）',
+  },
+  5: {
+    name: 'OSSツール・エコシステム',
+    focus: '「オープンソースのAI開発ツール・フレームワーク・エコシステムの最新動向」',
+    researchGuide: '新規ツールのリリース、既存ツールの重要アップデート（LangChain / LlamaIndex / vLLM / Ollama 等）、開発者体験の向上、MLOps関連の動向に着目すること。',
+    category: 'tooling',
+    tagHint: '（例 tools, open-source, framework, developer, mlops）',
+  },
+  6: {
+    name: 'AIエージェント動向',
+    focus: '「AIエージェント・マルチエージェントシステムの最新動向」',
+    researchGuide: '自律エージェントのフレームワーク（AutoGen / CrewAI / LangGraph 等）、新実装事例、ベンチマーク、Computer Use・Webエージェント、コーディングエージェントの動向に着目すること。',
+    category: 'ml',
+    tagHint: '（例 agent, multi-agent, autonomous, agentic-ai, framework）',
+  },
+};
+
 // ---------------------------------------------------------------------------
 // 1. startResearch — タイマートリガーから呼ばれるエントリポイント
 // ---------------------------------------------------------------------------
@@ -145,24 +204,11 @@ function pollResearch() {
 
 function selectTopic_(cfg) {
   const date = new Date();
-  const today = Utilities.formatDate(
-    date,
-    'Asia/Tokyo',
-    'yyyy年M月d日',
-  );
+  const today = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy年M月d日');
+  const dayOfWeek = date.getDay(); // 0=日, 1=月, ..., 6=土
 
-  // 曜日を取得 (0:日, 1:月, 2:火, 3:水, 4:木, 5:金, 6:土)
-  const dayOfWeek = date.getDay();
-
-  // 曜日に応じてテーマを分岐させる（例: 月・水・金でトリガーされると仮定）
-  let promptFocus = 'AI分野（LLM、生成AI、機械学習、ロボティクス等）全般';
-  if (dayOfWeek === 1) { // 月曜日
-    promptFocus = '「基盤モデルやLLMの最新研究・論文の動向」';
-  } else if (dayOfWeek === 3) { // 水曜日
-    promptFocus = '「オープンソースのAIツールや開発者向けエコシステムの動向」';
-  } else if (dayOfWeek === 5) { // 金曜日
-    promptFocus = '「AIのビジネス活用事例や新しいプロダクトのリリース」';
-  }
+  const topic = DAILY_TOPICS_[dayOfWeek];
+  Logger.log('Today\'s theme: ' + topic.name);
 
   const res = UrlFetchApp.fetch(
     GENERATE_CONTENT_BASE + '?key=' + cfg.geminiApiKey,
@@ -176,14 +222,12 @@ function selectTopic_(cfg) {
             parts: [
               {
                 text:
-                  '今日は' +
-                  today +
-                  'です。' +
-                  promptFocus +
-                  'にフォーカスして、今最も注目すべきトピックを1つ選び、' +
+                  '今日は' + today + 'です。' +
+                  topic.focus + 'にフォーカスして、今最も注目すべきトピックを1つ選び、' +
                   'Deep Researchエージェントへの具体的な調査指示を日本語で作成してください。\n\n' +
                   'ルール:\n' +
                   '- 調査対象を「今日から直近1週間以内の情報」に厳密に限定するよう指示に含めること\n' +
+                  '- ' + topic.researchGuide + '\n' +
                   '- 調査指示のみを出力（前置き不要）\n' +
                   '- 調査の範囲、深さ、着目ポイントを明示',
               },
@@ -207,20 +251,10 @@ function formatBlogPost_(cfg, researchResult) {
   const today = Utilities.formatDate(date, 'Asia/Tokyo', 'yyyy-MM-dd');
   const dayOfWeek = date.getDay();
 
-  // 曜日に応じてカテゴリとタグのヒントを変える
-  let categoryStr = 'ml';
-  let tagHint = '（例 llm, generative-ai）';
-
-  if (dayOfWeek === 1) { // 月曜：研究・論文
-    categoryStr = 'ml';
-    tagHint = '（例 paper, llm, base-model）';
-  } else if (dayOfWeek === 3) { // 水曜：ツール
-    categoryStr = 'tooling';
-    tagHint = '（例 tools, open-source, framework）';
-  } else if (dayOfWeek === 5) { // 金曜：ビジネス・プロダクト
-    categoryStr = 'curation';
-    tagHint = '（例 business, product, use-case）';
-  }
+  // 曜日に応じてカテゴリとタグのヒントを DAILY_TOPICS_ から取得
+  const topic = DAILY_TOPICS_[dayOfWeek];
+  const categoryStr = topic.category;
+  const tagHint = topic.tagHint;
 
   const schema = {
     type: "OBJECT",
