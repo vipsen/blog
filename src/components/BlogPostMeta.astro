@@ -1,5 +1,6 @@
 ---
 import { joinBasePath } from '../utils/siteBaseUrl';
+import CategoryIcon from './CategoryIcon.astro';
 import {
 	ARTICLE_KIND_LABELS,
 	BLOG_CATEGORY_LABELS,
@@ -24,9 +25,10 @@ const { category, articleKind, tags = [], compact = false, centered = false } = 
 	compact ? (
 		<div class:list={['blog-post-meta', 'compact', centered && 'compact-centered']}>
 			<div class="compact-taxonomy" aria-label="Category and kind">
-				<span class="meta-group">
-					<span class="meta-label">Category</span>
-					<a href={`${joinBasePath(`category/${category}`)}/`}>{BLOG_CATEGORY_LABELS[category]}</a>
+				<span class="meta-group" title={BLOG_CATEGORY_LABELS[category]}>
+					<a href={`${joinBasePath(`category/${category}`)}/`} class="icon-link" aria-label={BLOG_CATEGORY_LABELS[category]}>
+						<CategoryIcon category={category} class="category-icon" />
+					</a>
 				</span>
 				<span class="meta-group">
 					<span class="meta-label">Kind</span>
@@ -51,9 +53,10 @@ const { category, articleKind, tags = [], compact = false, centered = false } = 
 		</div>
 	) : (
 		<div class="blog-post-meta">
-			<span class="meta-group">
-				<span class="meta-label">Category</span>
-				<a href={`${joinBasePath(`category/${category}`)}/`}>{BLOG_CATEGORY_LABELS[category]}</a>
+			<span class="meta-group" title={BLOG_CATEGORY_LABELS[category]}>
+				<a href={`${joinBasePath(`category/${category}`)}/`} class="icon-link" aria-label={BLOG_CATEGORY_LABELS[category]}>
+					<CategoryIcon category={category} class="category-icon" />
+				</a>
 			</span>
 			<span class="meta-group">
 				<span class="meta-label">Kind</span>
@@ -198,5 +201,20 @@ const { category, articleKind, tags = [], compact = false, centered = false } = 
 		border-color: rgba(35, 55, 255, 0.3);
 		background: #fff;
 		text-decoration: none;
+	}
+	.icon-link {
+		display: flex;
+		align-items: center;
+		color: rgb(var(--gray-dark));
+		transition: color 0.2s ease;
+	}
+	.icon-link:hover {
+		color: rgb(var(--accent));
+	}
+	.category-icon {
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 4px;
+		object-fit: cover;
 	}
 </style>

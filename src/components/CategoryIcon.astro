@@ -1,0 +1,20 @@
+---
+import type { BlogCategory } from '../lib/blogTaxonomy';
+import { joinBasePath } from '../utils/siteBaseUrl';
+
+interface Props {
+	category: BlogCategory;
+	class?: string;
+}
+
+const { category, class: className } = Astro.props;
+---
+
+<img
+	src={joinBasePath(`assets/categories/${category}.png`)}
+	alt={`${category} category icon`}
+	class={className}
+	width="48"
+	height="48"
+	loading="lazy"
+/>

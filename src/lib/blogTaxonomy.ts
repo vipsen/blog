@@ -1,12 +1,13 @@
-/** Single-word category slugs (content collection enum). */
-export const BLOG_CATEGORIES = ['ml', 'language', 'tooling', 'curation'] as const;
+export const BLOG_CATEGORIES = ['generative', 'industry', 'research', 'audio', 'tooling', 'agent'] as const;
 export type BlogCategory = (typeof BLOG_CATEGORIES)[number];
 
 export const BLOG_CATEGORY_LABELS: Record<BlogCategory, string> = {
-	ml: 'AI / ML',
-	language: 'Language',
+	generative: 'Generative AI',
+	industry: 'Industry & Labs',
+	research: 'Research & Papers',
+	audio: 'Audio & Vision',
 	tooling: 'Tooling',
-	curation: 'Curation',
+	agent: 'Agentic AI',
 };
 
 export const ARTICLE_KINDS = ['weekly-brief', 'spotlight'] as const;
