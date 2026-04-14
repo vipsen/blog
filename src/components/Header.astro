@@ -8,7 +8,10 @@ const homeHref = joinBasePath('');
 
 <header>
 	<nav>
-		<h2><a href={homeHref}>{SITE_TITLE}</a></h2>
+		<h2><a href={homeHref}>
+			<img src={joinBasePath('logo.svg')} alt="Logo" width="32" height="32" />
+			{SITE_TITLE}
+		</a></h2>
 		<div class="internal-links">
 			<HeaderLink href={homeHref}>Home</HeaderLink>
 			<HeaderLink href={joinBasePath('category')}>Categories</HeaderLink>
@@ -61,6 +64,9 @@ const homeHref = joinBasePath('');
 	h2 a,
 	h2 a.active {
 		text-decoration: none;
+		display: flex;
+		align-items: center;
+		gap: 0.5em;
 	}
 	nav {
 		display: flex;
